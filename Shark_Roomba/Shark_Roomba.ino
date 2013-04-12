@@ -13,6 +13,8 @@
 #define RIGHTSERVO  10
 #define BRUSHMOTOR  11
 #define VOLTAGEPIN  A0
+#define INIT        7
+#define ECHO        6
 
 // Movements
 #define LEFT_FWD()   leftServo.write(180);
@@ -58,6 +60,8 @@ void setup()
   pinMode(RIGHTFRONT, INPUT);
   pinMode(RIGHTREAR, INPUT);
   pinMode(BRUSHMOTOR, OUTPUT);
+  pinMode(INIT, OUTPUT);
+  pinMode(ECHO, INPUT);
   
   leftServo.attach(LEFTSERVO);
   rightServo.attach(RIGHTSERVO);
@@ -74,8 +78,8 @@ void loop()
   
   // Arbitrate, highest priority tasks first
   //if ( command == C_NONE ) command = rest();
-//  if ( command == C_NONE ) command = detectSwitch();
   if ( command == C_NONE ) command = detectVoltage();
+  if ( command == C_NONE ) command = detectSonar();
   if ( command == C_NONE ) command = detectIR();
   if ( command == C_NONE ) command = drive();
 
@@ -92,6 +96,7 @@ void checkAvoidDir()
     else
       avoidDir = -1;
       
+    // Voltage gets checked once per each rollover of this flag.  
     checkVoltageFlag = true;
   }
 }
@@ -115,7 +120,6 @@ void fullStop()
   RIGHT_STOP();
   digitalWrite(BRUSHMOTOR, LOW);
   
-//  sonarServo.detach();
 //  leftServo.detach();
 //  rightServo.detach();
 }
@@ -152,17 +156,91 @@ char rest()
 }
 */
 
+// Voltage gets checked every 5 seconds
 char detectVoltage()
 {
-  if (!checkVoltageFlag)
-    return C_NONE;
-  
-  int volts = analogRead(VOLTAGEPIN);
+  static char state = 0;
+  static unsigned long expireTime = millis() + 5000;
+  char retval = C_NONE;
+
+  switch (state)
+  {
+    case 0:
+      if (millis() > expireTime)
+      {
+        state++;
+      }
+      break;
+      
+    case 1:
+      expireTime = millis() + 5000;
+      state = 0;
+      
+      int volts = analogRead(VOLTAGEPIN);
  
-  if ( volts > 700 )
-    return C_NONE;
-  else
-    return C_STOP;
+      if ( volts > 700 )
+        retval C_NONE;
+      else
+        retval C_STOP;
+      break;
+  }
+  
+  return retval;
+}
+
+// Sonar readings happen every half second
+char detectSonar()
+{
+  static char state = 0;
+  static unsigned long expireTime = millis() + 500;
+  char retval = C_NONE;
+
+  switch (state)
+  {
+    case 0:
+      if (millis() > expireTime)
+      {
+        state++;
+      }
+      break;
+      
+    case 1:
+      // pulse the trigger line
+      digitalWrite(INIT, HIGH);
+      delayMicroseconds(100);
+      digitalWrite(INIT, LOW);
+      
+      // wait for the echo
+      duration = pulseIn(ECHO, HIGH);
+      
+      distance = duration / 116;
+      
+      Serial.println( distance );
+      
+      if ( distance < 10 )
+      {
+        digitalWrite(LEDPIN, LOW);
+        state++;
+      }
+      else   
+      {
+        state = 0;
+        expireTime = millis() + 500;
+      }
+      break;
+      
+    case 3:  // avoid
+      retval = avoid(0); //avoid(dir * -1);
+      if ( retval == C_NONE )
+      {
+        expireTime = millis() + 500;
+        state = 0;
+        digitalWrite(LEDPIN, HIGH);
+      }
+      break;
+  }
+  
+  return retval;
 }
 
 char detectIR()
@@ -176,7 +254,7 @@ char detectIR()
     case 0:
       if (digitalRead(LEFTREAR) == LOW)
       {
-        dir = 1;
+        dir = 0;
         state++;
       }
       else if (digitalRead(LEFTFRONT) == LOW)
@@ -191,7 +269,7 @@ char detectIR()
       }
       else if (digitalRead(RIGHTREAR) == LOW)
       {
-        dir = -1;
+        dir = 0;
         state++;
       }
       break;
