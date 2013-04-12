@@ -47,6 +47,7 @@ unsigned long globalExpireTime=0;
 char state = 0;
 char avoidDir = -1;
 boolean checkVoltageFlag = false;
+char lastDir = 0;
 
 // the setup routine runs once when you press reset:
 void setup() 
@@ -162,6 +163,7 @@ char detectVoltage()
   static char state = 0;
   static unsigned long expireTime = millis() + 5000;
   char retval = C_NONE;
+  int volts = 0;
 
   switch (state)
   {
@@ -176,12 +178,12 @@ char detectVoltage()
       expireTime = millis() + 5000;
       state = 0;
       
-      int volts = analogRead(VOLTAGEPIN);
+      volts = analogRead(VOLTAGEPIN);
  
       if ( volts > 700 )
-        retval C_NONE;
+        retval = C_NONE;
       else
-        retval C_STOP;
+        retval = C_STOP;
       break;
   }
   
@@ -215,6 +217,7 @@ char detectSonar()
       
       distance = duration / 116;
       
+      Serial.print("distance: ");
       Serial.println( distance );
       
       if ( distance < 10 )
@@ -229,8 +232,8 @@ char detectSonar()
       }
       break;
       
-    case 3:  // avoid
-      retval = avoid(0); //avoid(dir * -1);
+    case 2:  // avoid
+      retval = avoid(lastDir); //avoid(dir * -1);
       if ( retval == C_NONE )
       {
         expireTime = millis() + 500;
@@ -254,24 +257,25 @@ char detectIR()
     case 0:
       if (digitalRead(LEFTREAR) == LOW)
       {
-        dir = 0;
+        dir = 1;
         state++;
       }
       else if (digitalRead(LEFTFRONT) == LOW)
       {
-        dir = 0;
+        dir = 1;
         state++;
       }
       else if (digitalRead(RIGHTFRONT) == LOW)
       {
-        dir = 0;
+        dir = -1;
         state++;
       }
       else if (digitalRead(RIGHTREAR) == LOW)
       {
-        dir = 0;
+        dir = -1;
         state++;
       }
+      lastDir = dir;
       break;
       
     case 1:
