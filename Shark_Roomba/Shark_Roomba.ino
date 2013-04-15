@@ -8,13 +8,17 @@
 #define LEFTREAR    2
 #define LEFTFRONT   3
 #define RIGHTFRONT  4
+#define ECHO        6
+#define INIT        7
 #define RIGHTREAR   8
 #define LEFTSERVO   9
 #define RIGHTSERVO  10
 #define BRUSHMOTOR  11
+#define ENCODER     12
 #define VOLTAGEPIN  A0
-#define INIT        7
-#define ECHO        6
+#define ACCELX      A1
+#define ACCELY      A2
+#define CURRENTPIN  A1
 
 // Movements
 #define LEFT_FWD()   leftServo.write(180);
@@ -63,6 +67,7 @@ void setup()
   pinMode(BRUSHMOTOR, OUTPUT);
   pinMode(INIT, OUTPUT);
   pinMode(ECHO, INPUT);
+  pinMode(ENCODER, INPUT);
   
   leftServo.attach(LEFTSERVO);
   rightServo.attach(RIGHTSERVO);
@@ -77,11 +82,16 @@ void loop()
   
   checkAvoidDir();
   
+//  getAccel();
+  
   // Arbitrate, highest priority tasks first
   //if ( command == C_NONE ) command = rest();
   if ( command == C_NONE ) command = detectVoltage();
+  if ( command == C_NONE ) command = detectEncoder();
   if ( command == C_NONE ) command = detectSonar();
   if ( command == C_NONE ) command = detectIR();
+//  if ( command == C_NONE ) command = detectAccel();
+//  if (command == C_NONE ) command = detectCurrent();
   if ( command == C_NONE ) command = drive();
 
   motorOutput( command );   
@@ -101,6 +111,22 @@ void checkAvoidDir()
     checkVoltageFlag = true;
   }
 }
+
+//void getAccel()
+//{
+//  static unsigned long nextTime = millis() + 250;
+//  
+//  if (millis() > nextTime)
+//  {
+//    int x = analogRead(ACCELX);
+//    int y = analogRead(ACCELY);
+//    Serial.print("x: ");
+//    Serial.print(x);
+//    Serial.print("  y: ");
+//    Serial.println(y);
+//    nextTime = millis() + 250;
+//  }
+//}
 
 void motorOutput( char command )
 {
@@ -157,6 +183,50 @@ char rest()
 }
 */
 
+// If we haven't seen a new encoder transition in 5 seconds,
+// assume that we are stuck.
+char detectEncoder()
+{
+  static char state = 0;
+  static char lastEnc = LOW;
+  static unsigned long expireTime = millis() + 2500;
+  char retval = C_NONE;
+  int enc;
+  
+  switch( state )
+  {
+    case 0:
+      enc = digitalRead(ENCODER);
+//      Serial.print("Encoder: ");
+//      Serial.println(enc);
+      if ( enc == lastEnc )
+      {
+        if (millis() > expireTime)
+        {
+          // We're stuck
+          state++;
+        }
+      }
+      else
+      {
+        expireTime = millis() + 2500;
+        lastEnc = enc;
+      }
+      break;
+      
+    case 1:
+      retval = avoid(0);
+      if ( retval == C_NONE )
+      {
+        expireTime = millis() + 2500;
+        state = 0;
+      }
+      break;
+  }
+  
+  return retval;
+}
+
 // Voltage gets checked every 5 seconds
 char detectVoltage()
 {
@@ -179,6 +249,8 @@ char detectVoltage()
       state = 0;
       
       volts = analogRead(VOLTAGEPIN);
+//      Serial.print("V: ");
+//      Serial.println(volts);
  
       if ( volts > 700 )
         retval = C_NONE;
@@ -217,8 +289,8 @@ char detectSonar()
       
       distance = duration / 116;
       
-      Serial.print("distance: ");
-      Serial.println( distance );
+//      Serial.print("distance: ");
+//      Serial.println( distance );
       
       if ( distance < 10 )
       {
@@ -291,6 +363,84 @@ char detectIR()
   return retval;
 }
 
+// Current gets checked every 500 milliseconds
+//char detectCurrent()
+//{
+//  static char state = 0;
+//  static unsigned long expireTime = millis() + 50;
+//  char retval = C_NONE;
+//  int volts = 0;
+//  static int array[10] = {295,295,295,295,295,295,295,295,295,295};
+//  static char idx = 0;
+//  static char last = 0;
+//
+//  switch (state)
+//  {
+//    case 0:
+//      if (millis() > expireTime)
+//      {
+//        state++;
+//      }
+//      break;
+//      
+//    case 1:
+//      expireTime = millis() + 50;
+//      state = 0;
+//      
+////      volts = analogRead(CURRENTPIN);
+////      Serial.print("current: ");
+////      Serial.println(volts);
+//      int cur = analogRead(CURRENTPIN);
+//      int sum = 0;
+//      idx++;
+//      if (idx > 9)
+//        idx = 0;
+//      array[idx] = cur;
+//      for (int i=0; i<10; i++)
+//        sum += array[i];
+//      int avg = sum / 10;
+//      if (idx == 0)
+//      {
+//        Serial.print("Avg: ");
+//        Serial.println(avg);
+//      }
+//
+////      if ( volts > 700 )
+////        retval = C_NONE;
+////      else
+////        retval = C_STOP;
+//      break;
+//  }
+//  
+//  return retval;
+//}
+
+//char detectAccel()
+//{
+//  static char state = 0;
+//  char retval = C_NONE;
+//  static int array[10] = {295,295,295,295,295,295,295,295,295,295};
+//  static char idx = 0;
+//  static char last = 0;
+//
+//  switch(state)
+//  {
+//    case 0:
+//      int acc = analogRead(ACCELX);
+//      int sum = 0;
+//      idx++;
+//      if (idx > 9)
+//        idx = 0;
+//      array[idx] = acc;
+//      for (int i=0; i<10; i++)
+//        sum += array[i];
+//      int avg = sum / 10;
+//      Serial.print("Avg: ");
+//      Serial.println(avg);
+//      break;
+//  }  
+//  return retval;
+//}
 /*
   Implements a standard avoidance routine of:
     1. Back up for x seconds

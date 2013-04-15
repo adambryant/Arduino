@@ -6,7 +6,7 @@
 
 // digital pin 2 has a pushbutton attached to it. Give it a name:
 int trigPin = 7;
-int echoPin = 8;
+int echoPin = 6;
 int servoPin = 11;
 int ledPin = 13;
 
