@@ -19,6 +19,7 @@
 #define ACCELX      A1
 #define ACCELY      A2
 #define CURRENTPIN  A1
+#define DISTRESSPIN A3
 
 // Movements
 #define LEFT_FWD()   leftServo.write(180);
@@ -32,6 +33,7 @@
 #define BACKUP_TIME  (millis() + 1000)
 #define TURN_TIME    (millis() + 500 + random(750))
 #define GLOBAL_TIME  (millis() + 180000);
+#define ENCODER_TIME  1000
 
 // Behaviors
 #define C_NONE      0
@@ -68,6 +70,7 @@ void setup()
   pinMode(INIT, OUTPUT);
   pinMode(ECHO, INPUT);
   pinMode(ENCODER, INPUT);
+  pinMode(DISTRESSPIN, OUTPUT);
   
   leftServo.attach(LEFTSERVO);
   rightServo.attach(RIGHTSERVO);
@@ -130,6 +133,9 @@ void checkAvoidDir()
 
 void motorOutput( char command )
 {
+//  Serial.print("Command: ");
+//  Serial.println(command,DEC);
+  
   switch ( command )
   {
     case C_NONE:                               break;
@@ -189,7 +195,7 @@ char detectEncoder()
 {
   static char state = 0;
   static char lastEnc = LOW;
-  static unsigned long expireTime = millis() + 2500;
+  static unsigned long expireTime = millis() + ENCODER_TIME;
   char retval = C_NONE;
   int enc;
   
@@ -209,7 +215,7 @@ char detectEncoder()
       }
       else
       {
-        expireTime = millis() + 2500;
+        expireTime = millis() + ENCODER_TIME;
         lastEnc = enc;
       }
       break;
@@ -218,7 +224,7 @@ char detectEncoder()
       retval = avoid(0);
       if ( retval == C_NONE )
       {
-        expireTime = millis() + 2500;
+        expireTime = millis() + ENCODER_TIME;
         state = 0;
       }
       break;
@@ -249,13 +255,25 @@ char detectVoltage()
       state = 0;
       
       volts = analogRead(VOLTAGEPIN);
-//      Serial.print("V: ");
-//      Serial.println(volts);
+      Serial.print("V: ");
+      Serial.println(volts);
  
       if ( volts > 700 )
         retval = C_NONE;
       else
-        retval = C_STOP;
+      {
+        while(1)
+        {
+          digitalWrite(DISTRESSPIN, LOW);
+          delay(100);
+          digitalWrite(DISTRESSPIN, HIGH);
+          delay(100);
+          volts = analogRead(VOLTAGEPIN);
+          Serial.print("V: ");
+          Serial.println(volts);
+        }
+      }
+//        retval = C_STOP;
       break;
   }
   
@@ -266,7 +284,7 @@ char detectVoltage()
 char detectSonar()
 {
   static char state = 0;
-  static unsigned long expireTime = millis() + 500;
+  static unsigned long expireTime = millis() + 250;
   char retval = C_NONE;
 
   switch (state)
@@ -289,10 +307,10 @@ char detectSonar()
       
       distance = duration / 116;
       
-//      Serial.print("distance: ");
-//      Serial.println( distance );
+      Serial.print("distance: ");
+      Serial.println( distance );
       
-      if ( distance < 10 )
+      if ( distance < 7 )
       {
         digitalWrite(LEDPIN, LOW);
         state++;
@@ -462,9 +480,16 @@ char avoid( char dir )
   switch (state)
   {
     case 0:
-      expireTime = BACKUP_TIME; //millis() + 1000; //+ 500 + random(1,1500);
-      state++;
+      if (dir != 0)
+      {
+        expireTime = millis(); //+ 500 + random(1,1500);
+      }
+      else
+      {
+        expireTime = BACKUP_TIME; //millis() + 1000; //+ 500 + random(1,1500);
+      }
       retval = C_REVERSE;
+      state++;
       break;
       
     case 1:
@@ -474,9 +499,9 @@ char avoid( char dir )
         state++;
         switch (dir)
         {
-          case -1: retval = C_TURNLEFT; break;
+          case -1: retval = C_TURNLEFT; expireTime = millis() + 150 + random(350); break;
           case  0: retval = random(C_TURNLEFT, C_TURNRIGHT + 1); break;
-          case  1: retval = C_TURNRIGHT; break;
+          case  1: retval = C_TURNRIGHT; expireTime = millis() + 150 + random(350); break;
         }
       }
       break;
